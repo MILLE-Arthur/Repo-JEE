@@ -91,6 +91,7 @@ JacksonAutoConfiguration matched:
 ### 3
 
 Prediction : 
+
 Dans les negatives matches ?
 
 Pas present car dans le module spring-boot-jdbc qu'on n'a pas importé
@@ -162,4 +163,67 @@ Le nom du thread a l’étape 5 c’était restartedMain. Avec le jar, c’est m
 
 Ça révèle que DevTools lance l’application dans un thread dédié avec son propre classloader de redémarrage,
 et qu’il est inactif dans le jar
+
+# TP2
+
+## -- 3 --
+
+Prediction : 
+
+L’appli ne démarre pas ?
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Parameter 1 of constructor in org.sebsy.bestioles.service.AdoptionService required a bean of type 'java.time.Clock' that could not be found.
+
+
+Action:
+
+Consider defining a bean of type 'java.time.Clock' in your configuration.
+
+## -- 5 --
+
+Tests run: 2, Failures: 0, Errors: 0, Skipped: 0
+
+## -- 6 --
+
+adoptionService : 
+
+"dependencies":["emailNotifier","clock"]
+"type":"org.sebsy.bestioles.service.AdoptionService"
+
+clock : 
+
+"dependencies":["horlogeConfig"]
+"type":"java.time.Clock$SystemClock"
+
+## -- 7 --
+
+Prediction : 
+
+Echec au démarrage ?
+
+***************************
+APPLICATION FAILED TO START
+***************************
+
+Description:
+
+Parameter 0 of constructor in org.sebsy.bestioles.service.AdoptionService required a single bean, but 2 were found:
+- emailNotifier: defined in file [C:\Users\monPC\Documents\B3\JEE\bestioles\target\classes\org\sebsy\bestioles\notif\EmailNotifier.class]
+- smsNotifier: defined in file [C:\Users\monPC\Documents\B3\JEE\bestioles\target\classes\org\sebsy\bestioles\notif\SmsNotifier.class]
+
+This may be due to missing parameter name information
+
+Action:
+
+Consider marking one of the beans as @Primary, updating the consumer to accept multiple beans, or using @Qualifier to identify the bean that should be consumed
+
+Ensure that your compiler is configured to use the '-parameters' flag.
+You may need to update both your build tool settings as well as your IDE.
+(See https://github.com/spring-projects/spring-framework/wiki/Spring-Framework-6.1-Release-Notes#parameter-name-retention)
 
