@@ -10,7 +10,7 @@ import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
 
-import static org.junit.Assert.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class AdoptionServiceTest {
 
@@ -22,8 +22,6 @@ class AdoptionServiceTest {
 
         AdoptionService service = new AdoptionService(notifier, clock);
         LocalDate date = service.adopter("Rex", "lea@mail.fr");
-
-        System.out.println(recus);
 
         assertEquals(LocalDate.of(2027, 1, 1), date);
         assertEquals(List.of("lea@mail.fr <- Adoption de Rex confirmée le 01/01/2027"), recus);

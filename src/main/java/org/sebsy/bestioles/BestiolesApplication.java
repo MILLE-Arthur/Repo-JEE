@@ -2,12 +2,14 @@ package org.sebsy.bestioles;
 
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
+import org.springframework.boot.context.properties.ConfigurationPropertiesScan;
 
 @SpringBootApplication
+@ConfigurationPropertiesScan
 public class BestiolesApplication {
 
-	public static void main(String[] args) {
-		SpringApplication.run(BestiolesApplication.class, args);
-	}
+    public static void main(String[] args) {
+        SpringApplication.run(BestiolesApplication.class, args);
+    }
 
 }

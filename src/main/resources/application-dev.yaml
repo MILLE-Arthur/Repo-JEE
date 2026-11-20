@@ -1,0 +1,14 @@
+bestioles:
+  refuge:
+    nom: Refuge (dev)
+    capacite-max: 5
+
+logging:
+  level:
+    org.sebsy: DEBUG
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,beans

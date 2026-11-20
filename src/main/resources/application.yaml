@@ -2,8 +2,8 @@ spring:
   application:
     name: bestioles
 
-management:
-  endpoints:
-    web:
-      exposure:
-        include: health,beans
+bestioles:
+  refuge:
+    nom: Refuge des Bestioles
+    capacite-max: 30
+    email-contact: contact@refuge-bestioles.fr

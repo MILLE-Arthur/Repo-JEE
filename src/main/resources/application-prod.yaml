@@ -1,0 +1,3 @@
+bestioles:
+  refuge:
+    email-contact: ${BESTIOLES_CONTACT_EMAIL}

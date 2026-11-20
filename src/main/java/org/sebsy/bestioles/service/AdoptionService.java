@@ -1,7 +1,6 @@
 package org.sebsy.bestioles.service;
 
 import org.sebsy.bestioles.notif.Notifier;
-import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Service;
 
 import java.time.Clock;
@@ -13,7 +12,7 @@ public class AdoptionService {
     private final Notifier notifier;
     private final Clock clock;
 
-    public AdoptionService(@Qualifier("emailNotifier") Notifier notifier, Clock clock) {
+    public AdoptionService(Notifier notifier, Clock clock) {
         this.notifier = notifier;
         this.clock = clock;
     }
