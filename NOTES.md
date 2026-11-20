@@ -229,252 +229,273 @@ You may need to update both your build tool settings as well as your IDE.
 
 ## -- 9 --
 
-Dans ma compilation, la ligne Maven est `Compiling ... with javac [debug parameters release 25]` :
-l'option `-parameters` est donc bien active (le parent Spring Boot l'active).
+La ligne Maven dit : Compiling ... with javac [debug parameters release 25]
+Donc l'option -parameters est bien active (le parent Spring Boot l'active).
 
-Prédiction : `javap` affiche une section `MethodParameters` avec `notifier` et `clock` pour le constructeur.
+Prediction : 
 
-```
+javap affiche MethodParameters avec notifier et clock pour le constructeur
+
 javap -v -cp target/classes org.sebsy.bestioles.service.AdoptionService
-```
 
-Obtenu (section MethodParameters) : _à coller après exécution_
-
-Conclusion : non, cette piste n'explique pas mon erreur. Les noms de paramètres sont présents ;
-l'erreur vient du fait qu'il y a deux candidats (`emailNotifier` et `smsNotifier`) pour un seul `Notifier`.
-Le « This may be due to missing parameter name information » n'est qu'une piste générique du message.
+Conclusion : non, ça n'explique pas mon erreur. Les noms des paramètres sont bien là.
+L'erreur vient du fait qu'il y a 2 candidats (emailNotifier et smsNotifier) pour un seul Notifier.
+Le "This may be due to missing parameter name information" c'est juste une piste générique.
 
 ## -- 10 --
 
-| Service | Mécanisme | Où |
-|---|---|---|
-| `AdoptionService` (inchangé) | `@Primary` : le bean par défaut quand on ne précise rien | sur `EmailNotifier` |
-| `RappelService` | `@Qualifier("smsNotifier")` : on désigne le bean par son nom | sur le paramètre du constructeur |
-| `AlerteService` | injection d'une `List<Notifier>` : on reçoit tous les beans du type | paramètre du constructeur |
+AdoptionService (inchangé) → @Primary sur EmailNotifier : c'est le bean par défaut quand on précise rien
 
-Aucun service ne dépend d'une classe concrète : tous reçoivent des `Notifier`.
+RappelService → @Qualifier("smsNotifier") sur le paramètre du constructeur : on choisit le bean par son nom
+
+AlerteService → List<Notifier> dans le constructeur : on reçoit tous les beans Notifier
+
+Aucun service ne dépend d'une classe concrète, ils reçoivent tous des Notifier.
 
 ## -- 11 --
 
-Prédiction (`dependencies` sur `/actuator/beans`) :
+Prediction : 
 
-- `adoptionService` : `emailNotifier`, `clock`
-- `rappelService` : `smsNotifier`
-- `alerteService` : `emailNotifier`, `smsNotifier` (l'ordre peut varier)
-
-Obtenu : _à coller après exécution_
+adoptionService → emailNotifier, clock
+rappelService → smsNotifier
+alerteService → emailNotifier, smsNotifier (l'ordre peut changer)
 
 ## -- 13 --
 
-`./mvnw verify` : prédiction `Tests run: 2, Failures: 0, Errors: 0, Skipped: 0` et `BUILD SUCCESS`.
+./mvnw verify
 
-Obtenu : _à coller après exécution_
+Prediction : Tests run: 2, Failures: 0, Errors: 0, Skipped: 0 et BUILD SUCCESS
 
 ## -- 8 -- (approfondissement)
 
-Conflit rétabli en retirant provisoirement `@Primary` d'`EmailNotifier`.
+J'ai enlevé @Primary d'EmailNotifier pour remettre le conflit.
 
-Prédiction : non, `./mvnw package` ne produit pas de jar. Le projet compile, mais `package` passe par la phase `test` :
-`BestiolesApplicationTests.contextLoads` démarre le contexte Spring, qui échoue à cause des deux `Notifier`.
-Maven s'arrête avec `BUILD FAILURE` avant d'atteindre le plugin qui construit le jar.
-`AdoptionServiceTest` passe, lui, car il n'utilise pas Spring.
+Prediction : 
 
-Ligne qui a échoué : _à coller après exécution_ (attendu : `[ERROR] Failed to execute goal ...maven-surefire-plugin...:test (default-test) on project bestioles`)
+Non, ./mvnw package ne crée pas de jar.
+Ça compile, mais package passe par la phase test.
+BestiolesApplicationTests.contextLoads démarre Spring et ça plante à cause des 2 Notifier.
+Maven s'arrête en BUILD FAILURE avant de faire le jar.
+AdoptionServiceTest passe quand même parce qu'il n'utilise pas Spring.
 
-Un projet qui compile n'est pas forcément un projet qui se package : le câblage des beans n'est vérifié qu'au démarrage du contexte,
-donc le test de contexte est le seul filet qui l'attrape avant la livraison.
-Solution remise : `@Primary` sur `EmailNotifier`.
+Ligne qui a échoué : (à coller)
+Attendu : [ERROR] Failed to execute goal ...maven-surefire-plugin...:test (default-test) on project bestioles
+
+Un projet qui compile n'est pas forcément un projet qui se package.
+Les beans ne sont vérifiés qu'au démarrage du contexte, donc c'est le test de contexte qui l'attrape avant la livraison.
+Solution : @Primary remis sur EmailNotifier.
 
 ## -- 12 -- (approfondissement)
 
-Prédiction : avec `@Qualifier("SmsNotifier")` (majuscule), l'appli ne démarre pas. Le nom par défaut d'un bean est le nom de la classe
-avec la première lettre en minuscule (`smsNotifier`), et la comparaison est sensible à la casse. `RappelService` ne trouve aucun
-bean `Notifier` qualifié `SmsNotifier`.
+Prediction : 
 
-Obtenu : _à coller après exécution_ (attendu : `APPLICATION FAILED TO START`, `Parameter 0 of constructor in ...RappelService required a bean of type 'org.sebsy.bestioles.notif.Notifier' that could not be found`, avec `@org.springframework.beans.factory.annotation.Qualifier("SmsNotifier")` cité).
+Avec @Qualifier("SmsNotifier") (majuscule) l'appli ne démarre pas ?
+Le nom d'un bean c'est le nom de la classe avec la première lettre en minuscule (smsNotifier).
+Et Spring fait la différence entre majuscule et minuscule.
+Donc RappelService trouve aucun bean Notifier qui s'appelle SmsNotifier.
 
-Remis à `smsNotifier`.
+Attendu : APPLICATION FAILED TO START, Parameter 0 of constructor in ...RappelService required a bean of type 'org.sebsy.bestioles.notif.Notifier' that could not be found, avec @Qualifier("SmsNotifier") écrit dedans
+
+Remis à smsNotifier.
 
 ## -- 14 -- (approfondissement)
 
-`Refuge` reçoit `Veterinaire` et `Veterinaire` reçoit `Refuge`, tous deux par leur constructeur.
+Refuge reçoit Veterinaire et Veterinaire reçoit Refuge, les deux par le constructeur.
 
-Prédiction : l'application ne démarre pas. Spring doit créer `refuge`, qui a besoin de `veterinaire`, qui a besoin de `refuge`... :
-aucun des deux ne peut être instancié le premier.
+L'appli ne démarre pas ?
+Spring doit créer refuge, qui a besoin de veterinaire, qui a besoin de refuge...
+Aucun des deux peut être créé en premier.
 
-Obtenu : _à coller après exécution_ (attendu : `APPLICATION FAILED TO START`, `The dependencies of some of the beans in the application context form a cycle:` avec le schéma `refuge` ↔ `veterinaire`, et `Action: Relying upon circular references is discouraged and they are prohibited by default...`)
+Attendu : APPLICATION FAILED TO START, The dependencies of some of the beans in the application context form a cycle: avec refuge ↔ veterinaire, et Action: Relying upon circular references is discouraged and they are prohibited by default...
 
 ## -- 15 -- (approfondissement)
 
-```
 ./mvnw spring-boot:run "-Dspring-boot.run.arguments=--spring.main.allow-circular-references=true"
-```
 
-Prédiction : ça échoue quand même.
+Prediction : ça échoue quand même ?
 
-Obtenu (section `Action`) : _à coller après exécution_ (attendu : `Despite circular references being allowed, the dependency cycle between beans could not be broken. Update your application to remove the dependency cycle between beans.`)
+Attendu : Despite circular references being allowed, the dependency cycle between beans could not be broken. Update your application to remove the dependency cycle between beans.
 
-Explication : pour casser un cycle, Spring crée un bean à moitié (instancié, pas encore peuplé) et expose une référence anticipée
-à l'autre bean. Avec l'injection par constructeur, un bean ne peut pas être instancié sans son collaborateur : `Refuge` attend
-`Veterinaire`, qui attend `Refuge`, donc aucun des deux n'existe jamais, même partiellement. Cette astuce ne marche qu'avec
-l'injection par setter ou par champ, pas par constructeur.
+Explication :
+Pour casser un cycle, Spring crée un bean à moitié (créé mais pas rempli) et donne une référence à l'autre bean.
+Avec le constructeur, un bean peut pas être créé sans l'autre.
+Refuge attend Veterinaire, qui attend Refuge, donc aucun des deux existe, même à moitié.
+Ça marche seulement avec l'injection par setter ou par champ, pas par constructeur.
 
 ## -- 16 -- (approfondissement)
 
-Ce que les deux classes se partageaient, c'est la liste des pensionnaires. Elle est sortie dans un troisième bean, `Registre`
-(même package `org.sebsy.bestioles.cycle`). Le graphe devient `refuge → veterinaire → registre` et `refuge → registre` : sans cycle,
-sans `@Lazy`, sans setter, sans propriété.
+Ce que les 2 classes se partageaient c'est la liste des pensionnaires.
+Je l'ai mise dans un 3e bean, Registre (même package org.sebsy.bestioles.cycle).
+Ça donne refuge → veterinaire → registre et refuge → registre.
+Plus de cycle, et sans @Lazy, sans setter, sans propriété.
 
-Prédiction (`dependencies` sur `/actuator/beans`) :
+Prediction : 
 
-- `refuge` : `veterinaire`, `registre`
-- `veterinaire` : `registre`
-- `registre` : liste vide
-
-Obtenu : _à coller après exécution_
+refuge → veterinaire, registre
+veterinaire → registre
+registre → liste vide
 
 ## -- 17 -- (approfondissement)
 
-Le package `cycle` est un exercice, pas du code de Bestioles : retiré dans un commit à part (`git rm -r`).
-`git log --oneline` montre le commit de résolution du cycle puis celui du retrait.
+Le package cycle c'était juste un exercice, c'est pas du code de Bestioles.
+Je l'ai retiré dans un commit à part (git rm -r).
+git log --oneline montre le commit qui résout le cycle puis celui qui le retire.
 
 # TP3
 
 ## -- 1 --
 
-Dépendances ajoutées via Initializr (Validation, puis Explore) : **2**
+Dépendances ajoutées avec Initializr (Validation, puis Explore) : 2
 
-- `spring-boot-starter-validation` : pas de `scope` (compile)
-- `spring-boot-starter-validation-test` : `scope` test
+spring-boot-starter-validation → pas de scope (compile)
+spring-boot-starter-validation-test → scope test
 
 ## -- 4 --
 
-Obtenu (démarrage avec `./mvnw spring-boot:run`) : _à coller après exécution_
+Obtenu (avec ./mvnw spring-boot:run) : (à coller)
 
-Attendu : `>>> Refuge des Bestioles : 30 places`
+Attendu : >>> Refuge des Bestioles : 30 places
 
 ## -- 5 --
 
-Prédiction : `capacite-max: 120` dépasse le `@Max(50)`. L'application ne démarre pas (`APPLICATION FAILED TO START`,
-`Binding to target ... RefugeProperties failed`). Le bloc donne `Origin: class path resource [application.yaml] - 14:19` :
-ligne 14, colonne 19 de mon fichier, c'est-à-dire la ligne `    capacite-max: 120` et précisément le début de la valeur `120`
-(le fichier avait alors encore le bloc `management` en haut, d'où la ligne 14).
+Prediction : 
 
-Obtenu : _à coller après exécution_
+capacite-max: 120 dépasse le @Max(50), donc l'appli ne démarre pas ?
+APPLICATION FAILED TO START, Binding to target ... RefugeProperties failed
 
-Note : la langue du `Reason:` dépend de la locale de la JVM (français : « doit être inférieur ou égal à 50 », anglais : « must be less than or equal to 50 »).
+Le bloc dit Origin: class path resource [application.yaml] - 14:19
+Donc ligne 14, colonne 19 de mon fichier : la ligne capacite-max: 120, au début de la valeur 120.
+(à ce moment le fichier avait encore le bloc management en haut, c'est pour ça la ligne 14)
+
+Note : la langue du Reason: dépend de la langue de la JVM (français : « doit être inférieur ou égal à 50 », anglais : « must be less than or equal to 50 »).
 
 ## -- 6 --
 
-Prédiction : avec `trente`, l'application ne démarre pas non plus, mais l'erreur est d'une autre nature : ce n'est plus une contrainte
-de validation violée, c'est une valeur qui ne se **convertit** pas en `int` (`failed to convert java.lang.String to int`,
-cause `NumberFormatException: For input string: "trente"`). La validation n'est même pas atteinte : le binding échoue avant.
-La ligne `Property:` désigne la même clé ; je compare ce que j'obtiens (forme du nom de la propriété, `Value:`, `Reason:`).
+Prediction : 
 
-Obtenu : _à coller après exécution_
+Avec trente l'appli démarre pas non plus, mais l'erreur est pas la même.
+Là c'est pas une contrainte pas respectée, c'est que trente peut pas être converti en int
+(failed to convert java.lang.String to int, NumberFormatException: For input string: "trente").
+La validation est même pas atteinte, ça plante avant au binding.
+La ligne Property: montre la même clé, je compare ce que j'obtiens (nom de la propriété, Value:, Reason:).
 
-`capacite-max` remis à `30`.
+capacite-max remis à 30.
 
 ## -- 7 --
 
-`application-dev.yaml` : nom `Refuge (dev)`, 5 places, `org.sebsy` en `DEBUG`, et le bloc `management` déplacé depuis `application.yaml`.
+application-dev.yaml : nom Refuge (dev), 5 places, org.sebsy en DEBUG, et le bloc management déplacé depuis application.yaml.
 
-Pourquoi `/actuator/beans` n'est plus exposé hors de `dev` : `application.yaml` est lu dans tous les profils, alors que
-`application-dev.yaml` n'est lu que quand le profil `dev` est actif ; en déplaçant le bloc `management` dans ce second fichier,
-l'exposition de `beans` n'existe plus que dans `dev`, et sans profil Spring Boot n'expose que `health` par défaut.
+Pourquoi /actuator/beans n'est plus exposé hors de dev :
+application.yaml est lu dans tous les profils, mais application-dev.yaml seulement quand le profil dev est actif.
+Comme j'ai mis management dans le 2e fichier, beans est exposé seulement en dev.
+Sans profil, Spring Boot expose que health par défaut.
 
 ## -- 12 --
 
-Ordre de priorité des sources (documentation Spring Boot, de la plus forte à la plus faible) : argument de ligne de commande,
-variable d'environnement, `application-{profil}.yaml`, `application.yaml`.
-Pour les variables d'environnement, `BESTIOLES_REFUGE_CAPACITEMAX` correspond à `bestioles.refuge.capacite-max` (liaison relâchée, les tirets sont ignorés).
+Ordre de priorité des sources (doc Spring Boot, de la plus forte à la plus faible) :
+argument de ligne de commande, variable d'environnement, application-{profil}.yaml, application.yaml.
 
-| # | Lancement | Prédiction | Obtenu |
-|---|---|---|---|
-| 1 | `java -jar target/bestioles-0.0.1-SNAPSHOT.jar` | `>>> Refuge des Bestioles : 30 places` | _à coller_ |
-| 2 | idem, `--spring.profiles.active=dev` | `>>> Refuge (dev) : 5 places` | _à coller_ |
-| 3 | idem 2, avec la variable `BESTIOLES_REFUGE_CAPACITEMAX=3` | `>>> Refuge (dev) : 3 places` (la variable bat le yaml de profil) | _à coller_ |
-| 4 | idem 2, `--bestioles.refuge.capacite-max=2` en plus | `>>> Refuge (dev) : 2 places` (l'argument bat le yaml) | _à coller_ |
-| 5 | idem 2, variable à 3 **et** argument à 2 | `>>> Refuge (dev) : 2 places` (l'argument bat la variable) | _à coller_ |
-| 6 | sans argument de profil, avec `SPRING_PROFILES_ACTIVE=dev` | `>>> Refuge (dev) : 5 places` (la variable active le profil ; la variable de capacité a été retirée) | _à coller_ |
+Pour les variables d'environnement, BESTIOLES_REFUGE_CAPACITEMAX correspond à bestioles.refuge.capacite-max (les tirets sont ignorés).
 
-Le script `tp03-lancements.ps1` (à la racine) rejoue ces six lignes et affiche la ligne `>>>` de chacune.
+Prediction / Obtenu :
+
+1. java -jar target/bestioles-0.0.1-SNAPSHOT.jar
+→ >>> Refuge des Bestioles : 30 places
+
+2. pareil avec --spring.profiles.active=dev
+→ >>> Refuge (dev) : 5 places
+
+3. comme le 2, avec la variable BESTIOLES_REFUGE_CAPACITEMAX=3
+→ >>> Refuge (dev) : 3 places (la variable passe avant le yaml du profil)
+
+4. comme le 2, avec --bestioles.refuge.capacite-max=2 en plus
+→ >>> Refuge (dev) : 2 places (l'argument passe avant le yaml)
+
+5. comme le 2, variable à 3 et argument à 2
+→ >>> Refuge (dev) : 2 places (l'argument passe avant la variable)
+
+6. sans argument de profil, avec SPRING_PROFILES_ACTIVE=dev
+→ >>> Refuge (dev) : 5 places (la variable active le profil, et j'ai retiré la variable de capacité)
+
+Le script tp03-lancements.ps1 (à la racine) refait ces 6 lancements et affiche la ligne >>> de chacun.
 
 ## -- 13 --
 
-De la source la plus forte à la plus faible :
+De la plus forte à la plus faible :
 
-1. argument de ligne de commande (`--bestioles.refuge.capacite-max=2`) : lignes 4 et 5
-2. variable d'environnement (`BESTIOLES_REFUGE_CAPACITEMAX=3`) : ligne 3
-3. fichier de profil (`application-dev.yaml`) : lignes 2 et 6 (le profil peut lui-même être activé par argument ou par variable)
-4. `application.yaml` : ligne 1
+1. argument de ligne de commande (--bestioles.refuge.capacite-max=2) : lignes 4 et 5
+2. variable d'environnement (BESTIOLES_REFUGE_CAPACITEMAX=3) : ligne 3
+3. fichier de profil (application-dev.yaml) : lignes 2 et 6 (le profil peut être activé par un argument ou par une variable)
+4. application.yaml : ligne 1
 
 ## -- 14 --
 
-`./mvnw verify` : _à coller après exécution_ (attendu : `BUILD SUCCESS`, 2 tests).
+./mvnw verify
 
-`git grep -n datasource` : aucune ligne (le projet ne contient aucune configuration de base de données ; aucune dépendance JDBC).
+Attendu : BUILD SUCCESS, 2 tests
+
+git grep -n datasource → aucune ligne
+Le projet a aucune config de base de données et aucune dépendance JDBC.
 
 ## -- 8 -- (approfondissement)
 
-`ConsoleNotifier` (`@Component` + `@Profile("dev")`) écrit `<destinataire> <- <message>` sur la console.
+ConsoleNotifier (@Component + @Profile("dev")) écrit <destinataire> <- <message> dans la console.
 
-Prédiction (`dependencies` en `dev`, à ce stade `EmailNotifier` est encore `@Primary` sans profil) :
+Prediction (dependencies en dev, EmailNotifier est encore @Primary sans profil) :
 
-- `adoptionService` : `emailNotifier`, `clock`
-- `rappelService` : `smsNotifier`
-- `alerteService` : `emailNotifier`, `smsNotifier`, `consoleNotifier` (ordre libre)
+adoptionService → emailNotifier, clock
+rappelService → smsNotifier
+alerteService → emailNotifier, smsNotifier, consoleNotifier (ordre libre)
 
-Commande : `./mvnw spring-boot:run -Dspring-boot.run.profiles=dev "-Dspring-boot.run.arguments=--server.port=8080"`
-
-Obtenu : _à coller après exécution_
+Commande : ./mvnw spring-boot:run -Dspring-boot.run.profiles=dev "-Dspring-boot.run.arguments=--server.port=8080"
 
 ## -- 9 -- (approfondissement)
 
-Règle : en `dev`, aucun e-mail ne part ; hors `dev`, rien ne change par rapport au TP 02. Sans toucher aux trois services :
+Règle : en dev aucun e-mail part, hors dev rien change par rapport au TP 02.
+Sans toucher aux 3 services :
 
-- `EmailNotifier` : `@Profile("!dev")` (le bean n'existe plus en `dev`) ; il reste `@Primary` hors `dev`
-- `ConsoleNotifier` : `@Profile("dev")` et `@Primary`. Les deux `@Primary` ne coexistent jamais, car leurs profils sont exclusifs ;
-  sans cela `AdoptionService` aurait deux `Notifier` primaires ou un conflit à nouveau.
+EmailNotifier → @Profile("!dev") (le bean existe plus en dev), et il reste @Primary hors dev
+ConsoleNotifier → @Profile("dev") et @Primary
 
-`dependencies` en `dev` (prédiction) :
+Les 2 @Primary sont jamais là en même temps parce que leurs profils s'excluent.
+Sinon AdoptionService aurait 2 Notifier primaires et on aurait de nouveau un conflit.
 
-- `adoptionService` : `consoleNotifier`, `clock`
-- `rappelService` : `smsNotifier` (le `@Qualifier` désigne le SMS même en `dev`)
-- `alerteService` : `smsNotifier`, `consoleNotifier` (plus d'e-mail)
+Prediction (dependencies en dev) :
 
-Profil par défaut (lancé avec `--management.endpoints.web.exposure.include=beans`) : `adoptionService` : `emailNotifier`, `clock` ;
-`rappelService` : `smsNotifier` ; `alerteService` : `emailNotifier`, `smsNotifier` (identique au TP 02).
+adoptionService → consoleNotifier, clock
+rappelService → smsNotifier (le @Qualifier vise le SMS même en dev)
+alerteService → smsNotifier, consoleNotifier (plus d'e-mail)
 
-Obtenu : _à coller après exécution_
+Profil par défaut (lancé avec --management.endpoints.web.exposure.include=beans) :
+adoptionService → emailNotifier, clock
+rappelService → smsNotifier
+alerteService → emailNotifier, smsNotifier
+C'est pareil que le TP 02.
 
 ## -- 10 -- (approfondissement)
 
-`EmailNotifier` reçoit `RefugeProperties` et journalise `[e-mail de <adresse de contact>] <destinataire> <- <message>`.
+EmailNotifier reçoit RefugeProperties et écrit [e-mail de <adresse de contact>] <destinataire> <- <message> dans les logs.
 
-`emailNotifier` dépend maintenant du bean `bestioles.refuge-org.sebsy.bestioles.config.RefugeProperties`
-(nom d'un bean `@ConfigurationProperties` : préfixe, un tiret, nom complet de la classe).
-
-Obtenu : _à coller après exécution_
+emailNotifier dépend maintenant du bean bestioles.refuge-org.sebsy.bestioles.config.RefugeProperties
+(le nom d'un bean @ConfigurationProperties c'est : le préfixe, un tiret, puis le nom complet de la classe).
 
 ## -- 11 -- (approfondissement)
 
-`application-prod.yaml` : `bestioles.refuge.email-contact: ${BESTIOLES_CONTACT_EMAIL}`. Le reste (nom, capacité) vient de `application.yaml`.
+application-prod.yaml : bestioles.refuge.email-contact: ${BESTIOLES_CONTACT_EMAIL}
+Le reste (nom, capacité) vient de application.yaml.
 
-Prédiction : sans la variable, l'application refuse de démarrer. Le `Binder` des `@ConfigurationProperties` ne lève pas d'erreur sur
-un `${...}` introuvable : il laisse le texte tel quel. `emailContact` vaut donc littéralement `${BESTIOLES_CONTACT_EMAIL}`,
-ce qui n'est pas une adresse bien formée et est rejeté par `@Email` (`Reason: doit être une adresse électronique bien formée`).
-(Si Spring signalait à la place `Could not resolve placeholder`, la conclusion serait la même : refus de démarrer.)
+Prediction : 
 
-```
+Sans la variable, l'appli refuse de démarrer ?
+Le Binder des @ConfigurationProperties dit pas d'erreur quand il trouve pas le ${...}, il laisse le texte comme ça.
+Donc emailContact vaut vraiment ${BESTIOLES_CONTACT_EMAIL}, c'est pas une adresse valide et @Email refuse
+(Reason: doit être une adresse électronique bien formée).
+(Si Spring dit plutôt Could not resolve placeholder, c'est pareil : l'appli démarre pas.)
+
 java -jar target/bestioles-0.0.1-SNAPSHOT.jar --spring.profiles.active=prod
-```
 
-Obtenu sans la variable : _à coller après exécution_
+Avec la variable (BESTIOLES_CONTACT_EMAIL=accueil@refuge-bestioles.fr)
+Attendu : >>> Refuge des Bestioles : 30 places
 
-Avec la variable (`BESTIOLES_CONTACT_EMAIL=accueil@refuge-bestioles.fr`), attendu : `>>> Refuge des Bestioles : 30 places`.
-
-Obtenu avec la variable : _à coller après exécution_
-
-`/actuator/beans` répond 404 en `prod` : le bloc `management` n'est que dans `application-dev.yaml`, donc seul `health` est exposé.
-Vérification : `curl.exe -i localhost:8080/actuator/beans`.
+/actuator/beans répond 404 en prod : le bloc management est seulement dans application-dev.yaml, donc seul health est exposé.
+Vérification : curl.exe -i localhost:8080/actuator/beans
